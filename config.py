@@ -2,15 +2,12 @@ import os
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 if not BOT_TOKEN:
-    raise ValueError("No BOT_TOKEN found in environment variables!")
+    raise ValueError("No BOT_TOKEN found!")
 
-ADMIN_ID = os.environ.get('ADMIN_ID')
-if ADMIN_ID:
-    ADMIN_ID = int(ADMIN_ID)
-else:
-    ADMIN_ID = None
-    print("⚠️ ADMIN_ID не найден в переменных окружения! Админка работать не будет.")
+admin_env = os.environ.get('ADMIN_ID')
+ADMIN_ID = int(admin_env) if admin_env else None
+
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 TVMAZE_URL = "https://api.tvmaze.com"
-CHECK_INTERVAL = 60 * 60  # 1 час
-DB_NAME = "series_bot.db"
+CHECK_INTERVAL = 60 * 15

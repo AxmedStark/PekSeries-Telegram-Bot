@@ -13,7 +13,7 @@ class UpdateChecker:
     async def start(self):
         while True:
             logging.info("⏳ Проверка обновлений...")
-            subs = self.db.get_all_subscriptions()
+            subs = await self.db.get_all_subscriptions()
             unique_show_ids = set(sub[1] for sub in subs)
 
             latest_episodes = {}
@@ -29,7 +29,7 @@ class UpdateChecker:
                     ep = latest_episodes[show_id]
                     if ep['id'] != last_ep_id:
                         await self._send_notification(user_id, show_name, ep)
-                        self.db.update_last_episode(user_id, show_id, ep['id'])
+                        await self.db.update_last_episode(user_id, show_id, ep['id'])
 
             logging.info(f"✅ Готово. Спим {CHECK_INTERVAL} сек.")
             await asyncio.sleep(CHECK_INTERVAL)

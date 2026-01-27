@@ -35,7 +35,7 @@ async def cmd_admin(message: Message, db):
     if message.from_user.id != ADMIN_ID:
         return  # Игнорируем чужих
 
-    users_count, subs_count = db.get_stats()
+    users_count, subs_count = await db.get_stats()
     await message.answer(
         f"👑 <b>Панель Администратора</b>\n\n"
         f"👥 Пользователей: {users_count}\n"
@@ -60,7 +60,7 @@ async def process_add_show(message: Message, state: FSMContext, db):
     sid, name, url = await TVMazeClient.search_show(query)
 
     if sid:
-        if db.add_subscription(message.from_user.id, sid, name):
+        if await db.add_subscription(message.from_user.id, sid, name):
             await msg.edit_text(
                 f"✅ Подписался на <b><a href='{url}'>{name}</a></b>!",
                 parse_mode="HTML",
@@ -77,7 +77,7 @@ async def process_add_show(message: Message, state: FSMContext, db):
 # --- СПИСОК (С удалением) ---
 @router.callback_query(F.data == "btn_list")
 async def cb_list(callback: CallbackQuery, db):
-    subs = db.get_user_subscriptions(callback.from_user.id)
+    subs = await db.get_user_subscriptions(callback.from_user.id)
     if not subs:
         await callback.message.edit_text("У тебя пока нет подписок.", reply_markup=get_main_keyboard())
         return
@@ -94,7 +94,7 @@ async def cb_list(callback: CallbackQuery, db):
 @router.callback_query(F.data.startswith("del_"))
 async def cb_delete(callback: CallbackQuery, db):
     show_name = callback.data.split("del_")[1]
-    db.delete_subscription(callback.from_user.id, show_name)
+    await db.delete_subscription(callback.from_user.id, show_name)
     await callback.answer(f"{show_name} удален!")
     # Обновляем список
     await cb_list(callback, db)
@@ -106,7 +106,7 @@ async def cb_calendar(callback: CallbackQuery, db):
     await callback.answer("Загружаю календарь...")
     msg = await callback.message.answer("⏳ Проверяю даты выхода...")
 
-    subs = db.get_user_subscriptions(callback.from_user.id)
+    subs = await db.get_user_subscriptions(callback.from_user.id)
     if not subs:
         await msg.edit_text("Список пуст.")
         return

@@ -1,33 +1,31 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from config import BOT_TOKEN, DB_NAME
+from config import BOT_TOKEN, DATABASE_URL  # <-- Берем URL
 from database import Database
 from handlers import router
 from scheduler import UpdateChecker
 
+
 async def main():
     logging.basicConfig(level=logging.INFO)
 
-    # 1. Инициализация базы данных
-    db = Database(DB_NAME)
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL не задан! Проверь переменные окружения.")
 
-    # 2. Инициализация бота
+    db = Database(DATABASE_URL)
+
+    await db.connect()
+
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
-    # 3. Подключаем роутер с хендлерами
     dp.include_router(router)
-
-    # ВАЖНО: Внедряем базу данных в хендлеры
-    # Теперь во всех функциях handlers.py аргумент `db` будет доступен автоматически
     dp["db"] = db
 
-    # 4. Запускаем чекер обновлений
     checker = UpdateChecker(bot, db)
     asyncio.create_task(checker.start())
 
-    # 5. Запуск polling
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
