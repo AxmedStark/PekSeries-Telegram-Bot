@@ -1,0 +1,7 @@
+aiogram==3.17.0
+httpx==0.28.1
+beautifulsoup4==4.12.3
+apscheduler==3.11.0
+aiohttp-proxy==0.1.2
+cloudscraper==1.2.71
+aiohttp
