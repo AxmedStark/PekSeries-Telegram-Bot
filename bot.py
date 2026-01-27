@@ -9,11 +9,14 @@ from aiogram.types import Message
 import aiohttp
 from datetime import datetime
 
-CONFIG_TOKEN = os.environ.get('CONFIG_TOKEN')
-# --- КОНФИГУРАЦИЯ ---
-BOT_TOKEN = CONFIG_TOKEN
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+
+# Error handling to help you debug
+if not BOT_TOKEN:
+    raise ValueError("No BOT_TOKEN found in environment variables!")
+
 TVMAZE_URL = "https://api.tvmaze.com"
-CHECK_INTERVAL = 10  # Проверять раз в 1 час (в секундах)
+CHECK_INTERVAL = 60
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
