@@ -1,5 +1,6 @@
 import sqlite3
 
+
 class Database:
     def __init__(self, db_name):
         self.db_name = db_name
@@ -12,15 +13,25 @@ class Database:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS subscriptions (
-                user_id INTEGER,
-                show_id INTEGER,
-                show_name TEXT,
-                last_episode_id INTEGER DEFAULT 0,
-                UNIQUE(user_id, show_id)
-            )
-        ''')
-        # Миграция
+                       CREATE TABLE IF NOT EXISTS subscriptions
+                       (
+                           user_id
+                           INTEGER,
+                           show_id
+                           INTEGER,
+                           show_name
+                           TEXT,
+                           last_episode_id
+                           INTEGER
+                           DEFAULT
+                           0,
+                           UNIQUE
+                       (
+                           user_id,
+                           show_id
+                       )
+                           )
+                       ''')
         try:
             cursor.execute("ALTER TABLE subscriptions ADD COLUMN last_episode_id INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
@@ -75,3 +86,18 @@ class Database:
                        (episode_id, user_id, show_id))
         conn.commit()
         conn.close()
+
+    def get_stats(self):
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # Считаем уникальных пользователей
+        cursor.execute('SELECT COUNT(DISTINCT user_id) FROM subscriptions')
+        users_count = cursor.fetchone()[0]
+
+        # Считаем всего подписок
+        cursor.execute('SELECT COUNT(*) FROM subscriptions')
+        subs_count = cursor.fetchone()[0]
+
+        conn.close()
+        return users_count, subs_count
