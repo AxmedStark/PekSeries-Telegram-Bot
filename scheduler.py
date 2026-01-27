@@ -12,13 +12,12 @@ class UpdateChecker:
 
     async def start(self):
         while True:
-            logging.info("⏳ Проверка обновлений...")
+            logging.info("⏳ Checking updates...")
             subs = await self.db.get_all_subscriptions()
             unique_show_ids = set(sub[1] for sub in subs)
 
             latest_episodes = {}
             for show_id in unique_show_ids:
-                # Используем новый метод, который возвращает и постер
                 ep_data = await TVMazeClient.get_latest_episode_with_info(show_id)
                 if ep_data:
                     latest_episodes[show_id] = ep_data
@@ -31,11 +30,10 @@ class UpdateChecker:
                         await self._send_notification(user_id, show_name, ep)
                         await self.db.update_last_episode(user_id, show_id, ep['id'])
 
-            logging.info(f"✅ Готово. Спим {CHECK_INTERVAL} сек.")
+            logging.info(f"✅ Done. Sleep {CHECK_INTERVAL} сек.")
             await asyncio.sleep(CHECK_INTERVAL)
 
     async def _send_notification(self, user_id, show_name, ep):
-        # Очистка Summary от HTML тегов (<p>, <b>)
         raw_summary = ep.get('summary', '')
         clean_summary = ""
         if raw_summary:
@@ -43,10 +41,13 @@ class UpdateChecker:
             if len(clean_summary) > 200:
                 clean_summary = clean_summary[:200] + "..."
 
+        year = ep.get('show_year', '')
+        year_str = f" ({year})" if year else ""
+
         msg = (
-            f"🔥 <b>Вышла новая серия!</b>\n"
-            f"🎬 Сериал: <b>{show_name}</b>\n"
-            f"🔢 {ep.get('season')} сезон, {ep.get('number')} серия\n"
+            f"🔥 <b>New Episode!</b>\n"
+            f"🎬 Series: <b>{show_name}{year_str}</b>\n"
+            f"🔢 Season {ep.get('season')} - Episode{ep.get('number')}\n"
             f"📝 <b>{ep.get('name')}</b>\n\n"
             f"<i>{clean_summary}</i>"
         )
@@ -58,4 +59,4 @@ class UpdateChecker:
             else:
                 await self.bot.send_message(user_id, msg, parse_mode="HTML")
         except Exception as e:
-            logging.error(f"Ошибка отправки {user_id}: {e}")
+            logging.error(f"Send error {user_id}: {e}")

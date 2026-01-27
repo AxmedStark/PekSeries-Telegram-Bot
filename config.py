@@ -2,7 +2,7 @@ import os
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 if not BOT_TOKEN:
-    raise ValueError("No BOT_TOKEN found!")
+    raise ValueError("NO_BOT_TOKEN_ERROR")
 
 admin_env = os.environ.get('ADMIN_ID')
 ADMIN_ID = int(admin_env) if admin_env else None

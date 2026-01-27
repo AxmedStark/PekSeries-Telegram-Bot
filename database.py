@@ -7,17 +7,15 @@ class Database:
         self.pool = None
 
     async def connect(self):
-        """Создает пул соединений к базе"""
         try:
             self.pool = await asyncpg.create_pool(self.dsn)
             await self._init_db()
-            logging.info("✅ Успешное подключение к PostgreSQL")
+            logging.info("DATABASE_CONNECTION_SUCCESS")
         except Exception as e:
-            logging.error(f"❌ Ошибка подключения к БД: {e}")
+            logging.error(f"DATABASE_CONNECTION_ERROR: {e}")
             raise e
 
     async def _init_db(self):
-        """Создает таблицы, если их нет"""
         async with self.pool.acquire() as conn:
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -31,7 +29,6 @@ class Database:
 
     async def add_subscription(self, user_id, show_id, show_name):
         try:
-            # Используем $1, $2, $3 вместо ?
             await self.pool.execute(
                 'INSERT INTO subscriptions (user_id, show_id, show_name, last_episode_id) VALUES ($1, $2, $3, 0)',
                 user_id, show_id, show_name
@@ -41,9 +38,9 @@ class Database:
             return False
 
     async def get_user_subscriptions(self, user_id):
-        # fetch возвращает список записей
+
         rows = await self.pool.fetch('SELECT show_name, show_id FROM subscriptions WHERE user_id = $1', user_id)
-        return rows # asyncpg возвращает объекты Record, они ведут себя как кортежи/словари
+        return rows
 
     async def get_all_subscriptions(self):
         rows = await self.pool.fetch('SELECT user_id, show_id, show_name, last_episode_id FROM subscriptions')
@@ -54,7 +51,6 @@ class Database:
             'DELETE FROM subscriptions WHERE user_id = $1 AND show_name = $2',
             user_id, show_name
         )
-        # result возвращает строку типа "DELETE 1"
         return "DELETE 0" not in result
 
     async def update_last_episode(self, user_id, show_id, episode_id):

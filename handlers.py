@@ -9,8 +9,6 @@ from states import AddShow  # Импортируем состояния
 
 router = Router()
 
-
-# --- КЛАВИАТУРЫ ---
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Добавить сериал", callback_data="btn_add")],
@@ -20,74 +18,67 @@ def get_main_keyboard():
     ])
 
 
-# --- БАЗОВЫЕ КОМАНДЫ ---
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer(
-        "👋 Привет! Я слежу за выходом новых серий.\nВыбери действие:",
+        "👋 Hi! I'm checking releases of new episodes for you.\nChoose action:",
         reply_markup=get_main_keyboard()
     )
 
-
-# --- АДМИН ПАНЕЛЬ ---
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, db):
     if message.from_user.id != ADMIN_ID:
-        return  # Игнорируем чужих
+        return
 
     users_count, subs_count = await db.get_stats()
     await message.answer(
-        f"👑 <b>Панель Администратора</b>\n\n"
-        f"👥 Пользователей: {users_count}\n"
-        f"📺 Активных подписок: {subs_count}",
+        f"👑 <b>Admin Panel</b>\n\n"
+        f"👥 Users: {users_count}\n"
+        f"📺 Subscriptions: {subs_count}",
         parse_mode="HTML"
     )
 
-
-# --- FSM: ДОБАВЛЕНИЕ СЕРИАЛА ЧЕРЕЗ КНОПКУ ---
 @router.callback_query(F.data == "btn_add")
 async def cb_add_start(callback: CallbackQuery, state: FSMContext):
-    await callback.message.answer("✍️ Напиши название сериала или отправь ссылку на TVMaze:")
+    await callback.message.answer("✍️ Send me name of series or link from TVMaze:")
     await state.set_state(AddShow.waiting_for_title)
     await callback.answer()
-
 
 @router.message(AddShow.waiting_for_title)
 async def process_add_show(message: Message, state: FSMContext, db):
     query = message.text
-    msg = await message.answer(f"🔍 Ищу «{query}»...")
+    msg = await message.answer(f"🔍 Searching «{query}»...")
 
     sid, name, url = await TVMazeClient.search_show(query)
 
     if sid:
         if await db.add_subscription(message.from_user.id, sid, name):
             await msg.edit_text(
-                f"✅ Подписался на <b><a href='{url}'>{name}</a></b>!",
+                f"✅ Added <b><a href='{url}'>{name}</a></b> to your list!",
                 parse_mode="HTML",
                 reply_markup=get_main_keyboard()
             )
         else:
-            await msg.edit_text(f"ℹ️ Ты уже подписан на {name}.", reply_markup=get_main_keyboard())
+            await msg.edit_text(f"ℹ️ I already added {name}.", reply_markup=get_main_keyboard())
     else:
-        await msg.edit_text("❌ Ничего не найдено. Попробуй другое название.", reply_markup=get_main_keyboard())
+        await msg.edit_text("❌ I couldn't find it. Try different name.", reply_markup=get_main_keyboard())
 
     await state.clear()
 
 
-# --- СПИСОК (С удалением) ---
 @router.callback_query(F.data == "btn_list")
 async def cb_list(callback: CallbackQuery, db):
     subs = await db.get_user_subscriptions(callback.from_user.id)
     if not subs:
-        await callback.message.edit_text("У тебя пока нет подписок.", reply_markup=get_main_keyboard())
+        await callback.message.edit_text("Your list is empty.", reply_markup=get_main_keyboard())
         return
 
     buttons = []
     for show_name, show_id in subs:
-        buttons.append([InlineKeyboardButton(text=f"❌ Удалить: {show_name}", callback_data=f"del_{show_name}")])
-    buttons.append([InlineKeyboardButton(text="🔙 В меню", callback_data="btn_menu")])
+        buttons.append([InlineKeyboardButton(text=f"❌ Delete: {show_name}", callback_data=f"del_{show_name}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")])
 
-    await callback.message.edit_text("Твои сериалы (нажми, чтобы удалить):",
+    await callback.message.edit_text("Your series:",
                                      reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
@@ -95,54 +86,48 @@ async def cb_list(callback: CallbackQuery, db):
 async def cb_delete(callback: CallbackQuery, db):
     show_name = callback.data.split("del_")[1]
     await db.delete_subscription(callback.from_user.id, show_name)
-    await callback.answer(f"{show_name} удален!")
-    # Обновляем список
+    await callback.answer(f"{show_name} deleted!")
     await cb_list(callback, db)
 
 
-# --- КАЛЕНДАРЬ РЕЛИЗОВ ---
 @router.callback_query(F.data == "btn_calendar")
 async def cb_calendar(callback: CallbackQuery, db):
-    await callback.answer("Загружаю календарь...")
-    msg = await callback.message.answer("⏳ Проверяю даты выхода...")
-
+    await callback.answer("Updating calendar...")
+    msg = await callback.message.answer("⏳ Checking release dates...")
     subs = await db.get_user_subscriptions(callback.from_user.id)
     if not subs:
-        await msg.edit_text("Список пуст.")
+        await msg.edit_text("List is empty.")
         return
 
     report = []
-    # Асинхронно собираем даты (это может занять время, если подписок много)
     for show_name, show_id in subs:
-        next_ep = await TVMazeClient.get_next_episode(show_id)
+        next_ep  = await TVMazeClient.get_next_episode(show_id)
         if next_ep:
             date = next_ep.get('airdate', '???')
             ep_name = next_ep.get('name', 'Episode')
             s_num = f"S{next_ep.get('season')}E{next_ep.get('number')}"
             report.append(f"📅 <b>{date}</b>: {show_name} ({s_num})")
 
-    report.sort()  # Сортируем по дате
+    report.sort()
 
-    result_text = "<b>🗓 Ближайшие премьеры:</b>\n\n" + (
-        "\n".join(report) if report else "Пока нет информации о новых сериях.")
+    result_text = "<b>🗓 Upcoming releases:</b>\n\n" + (
+        "\n".join(report) if report else "No upcoming releases yet.")
 
     await msg.edit_text(result_text, parse_mode="HTML")
 
 
-
-# --- КНОПКИ НАВИГАЦИИ ---
 @router.callback_query(F.data == "btn_menu")
 async def cb_menu(callback: CallbackQuery):
-    await callback.message.edit_text("Главное меню:", reply_markup=get_main_keyboard())
+    await callback.message.edit_text("Main menu:", reply_markup=get_main_keyboard())
 
 
 @router.callback_query(F.data == "btn_help")
 async def cb_help(callback: CallbackQuery):
     text = (
-        "🤖 <b>Как пользоваться ботом:</b>\n\n"
-        "1. Жми <b>Добавить сериал</b>\n"
-        "2. Пиши название (например 'Ведьмак')\n"
-        "3. Бот сам будет присылать уведомления, когда выйдет новая серия!\n\n"
-        "В разделе <b>Календарь</b> можно посмотреть ближайшие даты."
+        "🤖 <b>How to use me:</b>\n\n"
+        "1. Press <b>Add series</b>\n"
+        "2. Type name of series')\n"
+        "3. I'll inform you about new episodes as soon as the are released!\n\n"
+        "In <b>Calendar</b> you can see upcoming releases."
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
