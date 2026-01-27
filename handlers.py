@@ -11,10 +11,10 @@ router = Router()
 
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить сериал", callback_data="btn_add")],
-        [InlineKeyboardButton(text="📋 Мои подписки", callback_data="btn_list"),
-         InlineKeyboardButton(text="📅 Календарь", callback_data="btn_calendar")],
-        [InlineKeyboardButton(text="ℹ️ Помощь", callback_data="btn_help")]
+        [InlineKeyboardButton(text="➕ Add series", callback_data="btn_add")],
+        [InlineKeyboardButton(text="📋 My list", callback_data="btn_list"),
+         InlineKeyboardButton(text="📅 Calendar", callback_data="btn_calendar")],
+        [InlineKeyboardButton(text="ℹ️ Help", callback_data="btn_help")]
     ])
 
 

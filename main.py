@@ -33,6 +33,8 @@ async def main():
     dp.include_router(router)
     dp["db"] = db
 
+    await set_commands(bot)
+
     checker = UpdateChecker(bot, db)
     asyncio.create_task(checker.start())
 
