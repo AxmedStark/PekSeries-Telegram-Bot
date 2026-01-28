@@ -27,18 +27,30 @@ async def cmd_start(message: Message):
     )
 
 
+import logging
+from aiogram.enums import ChatAction  # Не забудь импортировать
+
+
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, db):
-    if message.from_user.id != ADMIN_ID:
+    if str(message.from_user.id) != str(ADMIN_ID):
+        logging.warning(f"⚠️ Admin panel access from user: {message.from_user.id})
         return
 
-    users_count, subs_count = await db.get_stats()
-    await message.answer(
-        f"👑 <b>Admin Panel</b>\n\n"
-        f"👥 Users: {users_count}\n"
-        f"📺 Subscriptions: {subs_count}",
-        parse_mode="HTML"
-    )
+    await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+    try:
+        users_count, subs_count = await db.get_stats()
+
+        await message.answer(
+            f"👑 <b>Admin Panel</b>\n\n"
+            f"👥 Users: {users_count}\n" 
+            f"📺 Subscriptions: {subs_count}",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logging.error(f"error accessing admin panel: {e}")
+        await message.answer("⚠️ cant get data. try again.")
 
 
 @router.message(Command("add"))
