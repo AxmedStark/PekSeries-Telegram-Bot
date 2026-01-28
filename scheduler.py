@@ -11,26 +11,36 @@ class UpdateChecker:
         self.db = db
 
     async def start(self):
+        logging.info("🚀 Planner started")
         while True:
-            logging.info("⏳ Checking updates...")
-            subs = await self.db.get_all_subscriptions()
-            unique_show_ids = set(sub[1] for sub in subs)
+            try:
+                logging.info("⏳ Check updates...")
 
-            latest_episodes = {}
-            for show_id in unique_show_ids:
-                ep_data = await TVMazeClient.get_latest_episode_with_info(show_id)
-                if ep_data:
-                    latest_episodes[show_id] = ep_data
-                await asyncio.sleep(0.5)
+                subs = await self.db.get_all_subscriptions()
+                unique_show_ids = set(sub[1] for sub in subs)
 
-            for user_id, show_id, show_name, last_ep_id in subs:
-                if show_id in latest_episodes:
-                    ep = latest_episodes[show_id]
-                    if ep['id'] != last_ep_id:
-                        await self._send_notification(user_id, show_name, ep)
-                        await self.db.update_last_episode(user_id, show_id, ep['id'])
+                latest_episodes = {}
+                for show_id in unique_show_ids:
+                    ep_data = await TVMazeClient.get_latest_episode_with_info(show_id)
+                    if ep_data:
+                        latest_episodes[show_id] = ep_data
+                    await asyncio.sleep(0.5)
 
-            logging.info(f"✅ Done. Sleep {CHECK_INTERVAL} сек.")
+                for user_id, show_id, show_name, last_ep_id in subs:
+                    if show_id in latest_episodes:
+                        ep = latest_episodes[show_id]
+
+                        if ep['id'] != last_ep_id:
+                            await self._send_notification(user_id, show_name, ep)
+                            await self.db.update_last_episode(user_id, show_id, ep['id'])
+
+                logging.info(f"✅ Check completed. Next check in {CHECK_INTERVAL} sec.")
+
+            except Exception as e:
+                logging.error(f"⚠️ Critic error in planner: {e}")
+                await asyncio.sleep(60)
+                continue
+
             await asyncio.sleep(CHECK_INTERVAL)
 
     async def _send_notification(self, user_id, show_name, ep):

@@ -8,11 +8,17 @@ class Database:
 
     async def connect(self):
         try:
-            self.pool = await asyncpg.create_pool(self.dsn)
+            self.pool = await asyncpg.create_pool(
+                self.dsn,
+                min_size=1,
+                max_size=10,
+                command_timeout=60,
+                max_inactive_connection_lifetime=300
+            )
             await self._init_db()
-            logging.info("DATABASE_CONNECTION_SUCCESS")
+            logging.info("✅ DATABASE_CONNECTION_SUCCESS")
         except Exception as e:
-            logging.error(f"DATABASE_CONNECTION_ERROR: {e}")
+            logging.error(f"❌ DATABASE_CONNECTION_ERROR: {e}")
             raise e
 
     async def _init_db(self):
