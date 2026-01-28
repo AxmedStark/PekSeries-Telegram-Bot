@@ -85,7 +85,7 @@ async def cmd_list(message: Message, db):
 
     buttons = []
     for show_name, show_id in subs:
-        buttons.append([InlineKeyboardButton(text=f"❌ Delete: {show_name}", callback_data=f"del_{show_name}")])
+        buttons.append([InlineKeyboardButton(text=f"❌ {show_name}", callback_data=f"del_{show_name}")])
     buttons.append([InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")])
 
     await message.answer("Your series:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
@@ -100,7 +100,7 @@ async def cb_list(callback: CallbackQuery, db):
 
     buttons = []
     for show_name, show_id in subs:
-        buttons.append([InlineKeyboardButton(text=f"❌ Delete: {show_name}", callback_data=f"del_{show_name}")])
+        buttons.append([InlineKeyboardButton(text=f"❌ {show_name}", callback_data=f"del_{show_name}")])
     buttons.append([InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")])
 
     await callback.message.edit_text("Your series:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
