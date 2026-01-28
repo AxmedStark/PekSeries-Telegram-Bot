@@ -50,7 +50,7 @@ async def cmd_admin(message: Message, db):
         )
     except Exception as e:
         logging.error(f"error accessing admin panel: {e}")
-        await message.answer("⚠️ cant get data. try again.")
+        await message.answer("⚠️ Can't get data. try again.")
 
 
 @router.message(Command("add"))
