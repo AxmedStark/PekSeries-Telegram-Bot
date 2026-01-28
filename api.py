@@ -1,10 +1,11 @@
 import aiohttp
 import re
 from config import TVMAZE_URL
-
+from async_lru import alru_cache
 
 class TVMazeClient:
     @staticmethod
+    @alru_cache(maxsize=100)
     async def search_show(query):
         async with aiohttp.ClientSession() as session:
             link_match = re.search(r'tvmaze\.com/shows/(\d+)', query)

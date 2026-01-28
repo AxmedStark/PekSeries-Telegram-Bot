@@ -6,3 +6,4 @@ aiohttp-proxy==0.1.2
 cloudscraper==1.2.71
 aiohttp
 asyncpg
+async-lru
