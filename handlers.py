@@ -5,9 +5,10 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from aiogram.fsm.context import FSMContext
 from api import TVMazeClient
 from config import ADMIN_ID
-from states import AddShow  # Импортируем состояния
+from states import AddShow
 
 router = Router()
+
 
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -25,6 +26,7 @@ async def cmd_start(message: Message):
         reply_markup=get_main_keyboard()
     )
 
+
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, db):
     if message.from_user.id != ADMIN_ID:
@@ -38,11 +40,19 @@ async def cmd_admin(message: Message, db):
         parse_mode="HTML"
     )
 
+
+@router.message(Command("add"))
+async def cmd_add(message: Message, state: FSMContext):
+    await message.answer("✍️ Send me name of series or link from TVMaze:")
+    await state.set_state(AddShow.waiting_for_title)
+
+
 @router.callback_query(F.data == "btn_add")
 async def cb_add_start(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("✍️ Send me name of series or link from TVMaze:")
     await state.set_state(AddShow.waiting_for_title)
     await callback.answer()
+
 
 @router.message(AddShow.waiting_for_title)
 async def process_add_show(message: Message, state: FSMContext, db):
@@ -66,6 +76,21 @@ async def process_add_show(message: Message, state: FSMContext, db):
     await state.clear()
 
 
+@router.message(Command("list"))
+async def cmd_list(message: Message, db):
+    subs = await db.get_user_subscriptions(message.from_user.id)
+    if not subs:
+        await message.answer("Your list is empty.", reply_markup=get_main_keyboard())
+        return
+
+    buttons = []
+    for show_name, show_id in subs:
+        buttons.append([InlineKeyboardButton(text=f"❌ Delete: {show_name}", callback_data=f"del_{show_name}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")])
+
+    await message.answer("Your series:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
 @router.callback_query(F.data == "btn_list")
 async def cb_list(callback: CallbackQuery, db):
     subs = await db.get_user_subscriptions(callback.from_user.id)
@@ -78,8 +103,7 @@ async def cb_list(callback: CallbackQuery, db):
         buttons.append([InlineKeyboardButton(text=f"❌ Delete: {show_name}", callback_data=f"del_{show_name}")])
     buttons.append([InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")])
 
-    await callback.message.edit_text("Your series:",
-                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.message.edit_text("Your series:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 @router.callback_query(F.data.startswith("del_"))
@@ -88,6 +112,29 @@ async def cb_delete(callback: CallbackQuery, db):
     await db.delete_subscription(callback.from_user.id, show_name)
     await callback.answer(f"{show_name} deleted!")
     await cb_list(callback, db)
+
+
+@router.message(Command("calendar"))
+async def cmd_calendar(message: Message, db):
+    msg = await message.answer("⏳ Checking release dates...")
+    subs = await db.get_user_subscriptions(message.from_user.id)
+
+    if not subs:
+        await msg.edit_text("List is empty.")
+        return
+
+    report = []
+    for show_name, show_id in subs:
+        next_ep = await TVMazeClient.get_next_episode(show_id)
+        if next_ep:
+            date = next_ep.get('airdate', '???')
+            ep_name = next_ep.get('name', 'Episode')
+            s_num = f"S{next_ep.get('season')}E{next_ep.get('number')}"
+            report.append(f"📅 <b>{date}</b>: {show_name} ({s_num}) - {ep_name}\n")
+
+    report.sort()
+    result_text = "<b>🗓 Upcoming releases:</b>\n\n" + ("\n".join(report) if report else "No upcoming releases yet.")
+    await msg.edit_text(result_text, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "btn_calendar")
@@ -101,24 +148,28 @@ async def cb_calendar(callback: CallbackQuery, db):
 
     report = []
     for show_name, show_id in subs:
-        next_ep  = await TVMazeClient.get_next_episode(show_id)
+        next_ep = await TVMazeClient.get_next_episode(show_id)
         if next_ep:
             date = next_ep.get('airdate', '???')
             ep_name = next_ep.get('name', 'Episode')
             s_num = f"S{next_ep.get('season')}E{next_ep.get('number')}"
-            report.append(f"📅 <b>{date}</b>: {show_name} ({s_num})")
+            report.append(f"📅 <b>{date}</b>: {show_name} ({s_num}) - {ep_name}\n")
 
     report.sort()
-
-    result_text = "<b>🗓 Upcoming releases:</b>\n\n" + (
-        "\n".join(report) if report else "No upcoming releases yet.")
-
+    result_text = "<b>🗓 Upcoming releases:</b>\n\n" + ("\n".join(report) if report else "No upcoming releases yet.")
     await msg.edit_text(result_text, parse_mode="HTML")
 
 
-@router.callback_query(F.data == "btn_menu")
-async def cb_menu(callback: CallbackQuery):
-    await callback.message.edit_text("Main menu:", reply_markup=get_main_keyboard())
+@router.message(Command("help"))
+async def cmd_help(message: Message):
+    text = (
+        "🤖 <b>How to use me:</b>\n\n"
+        "1. Press <b>Add series</b> (or /add)\n"
+        "2. Type name of series\n"
+        "3. I'll inform you about new episodes!\n\n"
+        "Use /list to manage subscriptions."
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 
 @router.callback_query(F.data == "btn_help")
@@ -126,8 +177,13 @@ async def cb_help(callback: CallbackQuery):
     text = (
         "🤖 <b>How to use me:</b>\n\n"
         "1. Press <b>Add series</b>\n"
-        "2. Type name of series')\n"
-        "3. I'll inform you about new episodes as soon as the are released!\n\n"
+        "2. Type name of series\n"
+        "3. I'll inform you about new episodes!\n\n"
         "In <b>Calendar</b> you can see upcoming releases."
     )
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
+
+
+@router.callback_query(F.data == "btn_menu")
+async def cb_menu(callback: CallbackQuery):
+    await callback.message.edit_text("Main menu:", reply_markup=get_main_keyboard())
