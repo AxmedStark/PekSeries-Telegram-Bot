@@ -6,6 +6,8 @@ from aiogram.fsm.context import FSMContext
 from api import TVMazeClient
 from config import ADMIN_ID
 from states import AddShow
+import logging
+from aiogram.enums import ChatAction
 
 router = Router()
 
@@ -26,15 +28,10 @@ async def cmd_start(message: Message):
         reply_markup=get_main_keyboard()
     )
 
-
-import logging
-from aiogram.enums import ChatAction  # Не забудь импортировать
-
-
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, db):
     if str(message.from_user.id) != str(ADMIN_ID):
-        logging.warning(f"⚠️ Admin panel access from user: {message.from_user.id})
+        logging.warning(f"⚠️ Admin panel access from user: {message.from_user.id}")
         return
 
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
