@@ -1,5 +1,5 @@
+import html
 import logging
-import asyncio
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -22,11 +22,12 @@ def get_main_keyboard():
 
 
 @router.message(Command("start"))
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, db):
     await message.answer(
         "👋 Hi! I'm checking releases of new episodes for you.\nChoose action:",
         reply_markup=get_main_keyboard()
     )
+    await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
 
 
 @router.message(Command("admin"))
@@ -49,7 +50,6 @@ async def cmd_admin(message: Message, db):
         await message.answer("⚠️ Error fetching stats.")
 
 
-
 @router.message(Command("add"))
 async def cmd_add(message: Message, state: FSMContext):
     await message.answer("✍️ Send me name of series or link from TVMaze:")
@@ -65,15 +65,19 @@ async def cb_add_start(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AddShow.waiting_for_title)
 async def process_add_show(message: Message, state: FSMContext, db):
-    # Показываем статус "печатает", пока ищем
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     query = message.text
-    msg = await message.answer(f"🔍 Searching «{query}»...")
+    msg = await message.answer(f"🔍 Searching «{html.escape(query)}»...")
 
-    sid, name, url = await TVMazeClient.search_show(query)
+    try:
+        sid, name, url = await TVMazeClient.search_show(query)
 
-    if sid:
+        if not sid:
+            await msg.edit_text("❌ Couldn't find it. Try a different name.", reply_markup=get_main_keyboard())
+            await state.clear()
+            return
+
         is_added = await db.add_subscription(
             user_id=message.from_user.id,
             show_id=sid,
@@ -84,7 +88,11 @@ async def process_add_show(message: Message, state: FSMContext, db):
         )
 
         if is_added:
-            details = await TVMazeClient.get_show_details(sid)
+            try:
+                details = await TVMazeClient.get_show_details(sid)
+            except Exception as e:
+                logging.error(f"Error fetching details: {e}")
+                details = None
 
             if not details:
                 details = {'year': '????', 'rating': 'N/A', 'status': 'Unknown', 'genres': ''}
@@ -93,21 +101,28 @@ async def process_add_show(message: Message, state: FSMContext, db):
 
             text = (
                 f"✅ <b>Subscription added!</b>\n\n"
-                f"🎬 <b><a href='{url}'>{name}</a></b> ({details['year']})\n"
+                f"🎬 <b><a href='{url}'>{html.escape(name)}</a></b> ({details['year']})\n"
                 f"⭐ Rating: <b>{details['rating']}</b>\n"
                 f"{status_emoji} Status: {details['status']}\n"
-                f"🎭 Genres: {details['genres']}\n\n"
+                f"🎭 Genres: {html.escape(details['genres'])}\n\n"
                 f"<i>I'll notify you when a new episode is released.</i>"
             )
 
             await msg.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
-        else:
-            await msg.edit_text(f"ℹ️ You are already subscribed to <b>{name}</b>.", parse_mode="HTML",
-                                reply_markup=get_main_keyboard())
-    else:
-        await msg.edit_text("❌ Couldn't find it. Try a different name.", reply_markup=get_main_keyboard())
 
-    await state.clear()
+        else:
+            await msg.edit_text(
+                f"ℹ️ You are already subscribed to <b>{html.escape(name)}</b>.",
+                parse_mode="HTML",
+                reply_markup=get_main_keyboard()
+            )
+
+    except Exception as e:
+        logging.error(f"CRITICAL ERROR in add_show: {e}")
+        await msg.edit_text("⚠️ Error adding series. Please try again later.", reply_markup=get_main_keyboard())
+
+    finally:
+        await state.clear()
 
 
 
@@ -123,7 +138,7 @@ async def cb_list(callback: CallbackQuery, db):
 
 
 async def show_user_list(message_obj: Message, db):
-    subs = await db.get_user_subscriptions(message_obj.chat.id)  # Используем chat.id, это универсально
+    subs = await db.get_user_subscriptions(message_obj.chat.id)
 
     if not subs:
         try:
@@ -134,7 +149,7 @@ async def show_user_list(message_obj: Message, db):
 
     buttons = []
     for show_name, show_id in subs:
-        buttons.append([InlineKeyboardButton(text=f"❌ Delete: {show_name}", callback_data=f"del_{show_name}")])
+        buttons.append([InlineKeyboardButton(text=f"❌ {show_name}", callback_data=f"del_{show_name}")])
     buttons.append([InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")])
 
     try:
@@ -187,7 +202,6 @@ async def show_calendar(message_obj: Message, db):
     report.sort()
     result_text = "<b>🗓 Upcoming releases:</b>\n\n" + ("\n".join(report) if report else "No upcoming releases found.")
 
-    # Добавляем кнопку "Назад"
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Menu", callback_data="btn_menu")]])
 
     await msg.edit_text(result_text, parse_mode="HTML", reply_markup=kb)
